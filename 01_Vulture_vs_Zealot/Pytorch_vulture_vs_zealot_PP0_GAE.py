@@ -21,32 +21,16 @@ class Actor(nn.Module):
     def __init__(self, state_size, action_size):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(state_size,256) ## input state
-        self.do1 = nn.Dropout(p=0.3)
-
-        self.fc2 = nn.Linear(256,256)
-        self.do2 = nn.Dropout(p=0.3)
-        
-        self.fc3 = nn.Linear(256,256)
-        self.do3 = nn.Dropout(p=0.3)
-        
-        self.fc4 = nn.Linear(256,256)
-        self.do4 = nn.Dropout(p=0.3)
-        
+        self.fc2 = nn.Linear(256,256)        
+        self.fc3 = nn.Linear(256,256)       
+        self.fc4 = nn.Linear(256,256)             
         self.fc5 = nn.Linear(256,action_size) ## output each action
 
     def forward(self, x, soft_dim):
         x = torch.tanh(self.fc1(x))
-        x = self.do1(x)
-        
-        x = torch.tanh(self.fc2(x))
-        x = self.do2(x)
-        
-        x = torch.tanh(self.fc3(x))
-        x = self.do3(x)
-        
+        x = torch.tanh(self.fc2(x))  
+        x = torch.tanh(self.fc3(x))  
         x = torch.tanh(self.fc4(x))
-        x = self.do4(x)
-        
         prob_each_actions = F.softmax(self.fc5(x),dim=soft_dim) ## NN에서 각 action에 대한 확률을 추정한다.
 
         return prob_each_actions
@@ -54,33 +38,17 @@ class Actor(nn.Module):
 class Critic(nn.Module):
     def __init__(self, state_size):
         super(Critic, self).__init__()
-        self.fc1 = nn.Linear(state_size,256) ## input state
-        
-        self.do1 = nn.Dropout(p=0.3)
-
-        self.fc2 = nn.Linear(256,256)
-        
-        self.do2 = nn.Dropout(p=0.3)
-        
+        self.fc1 = nn.Linear(state_size,256) ## input state    
+        self.fc2 = nn.Linear(256,256)      
         self.fc3 = nn.Linear(256,256)
-        self.do3 = nn.Dropout(p=0.3)
-        
-        self.fc4 = nn.Linear(256,256)
-        
+        self.fc4 = nn.Linear(256,256)        
         self.fc5 = nn.Linear(256,1)## output value
 
     def forward(self, x):
         x = torch.tanh(self.fc1(x))
-        x = self.do1(x)
-        
         x = torch.tanh(self.fc2(x))
-        x = self.do2(x)
-        
         x = torch.tanh(self.fc3(x))
-        x = self.do3(x)
-        
         x = torch.tanh(self.fc4(x))
-        
         value = self.fc5(x)
 
         return value
@@ -215,7 +183,7 @@ def GAE(critic, states, rewards, masks):## GAE Generalized Advantage Estimator �
         advantage = delta + gamma* lmbda * advantage * masks[t]
         Advantages[t] = advantage
         
-    Advantages = (Advantages - Advantages.mean()) / Advantages.std()
+    Advantages = (Advantages - Advantages.mean()) / Advantages.std() ## 논문에는 없지만, 논문 저자의 openAI baseline code를 보면 Advantage를 정규화 시킵니다.
     return V_Target_G, Advantages
     
 def surrogate_loss(actor, old_policy, Advantages, states, actions):
@@ -225,13 +193,10 @@ def surrogate_loss(actor, old_policy, Advantages, states, actions):
     distribution = Categorical(prob_each_actions) ## Categorical 함수를 이용해 하나의 분포도로 만들어줍니다.
     entropies = distribution.entropy() ## 논문에 pi_seta에서 St에 따른 entropy bonus여서 action들의 분포에 대한 entropy로 구했습니다.
     
-    actions = actions.unsqueeze(1)
-    policy = prob_each_actions.gather(1,actions)
-    old_policy = old_policy.unsqueeze(1)
-    """
-    for t, act in enumerate(actions): ## enumerate는 자동으로 array에 index와 원소를 매칭해 반환해 줍니다. 0번부터 시작함.
-        policy[t] = prob_each_actions[t][act].item() ## 실제 action에 해당하는 new policy를 담아 줍니다.
-    """
+    actions = actions.unsqueeze(1) ## [batch_size, 1] shape 맞추기
+    policy = prob_each_actions.gather(1,actions) ## column 기준으로 [batch_size, 1] 실제로 선택되었던 actions index의 policy들만 모아줍니다.
+    old_policy = old_policy.unsqueeze(1) ## [batch_size, 1] shape 맞추기
+
     ratio = torch.exp(torch.log(policy) - torch.log(old_policy)) ## 원래는 policy_pi/policy_old_pi 식인데 = exp(log(policy_pi)-log(policy_old_pi)) 로 변경한것. 정확한 이유는 모르지만, 더 효율적이라 이렇게 쓴다고함.
     
     ratio_A = ratio * Advantages
@@ -266,7 +231,7 @@ def train(writer, n_iter, actor, critic, trajectories, actor_optimizer, critic_o
             mini_batch = torch.LongTensor(mini_batch) ## LongTensor가 찾아보니 정수형이였음.
             
             states_b = torch.Tensor(states)[mini_batch] ## 선택된 mini_batch index에 맞게 batch 크기 만큼 데이터를 선별함.
-            actions_b = torch.LongTensor(actions)[mini_batch]
+            actions_b = torch.LongTensor(actions)[mini_batch] ## action은 정수라 LongTensor로 함.
                  
             
             V_Target_G_b = torch.Tensor(V_Target_G)[mini_batch].detach() ## Target은 변하면 안되기 때문에 detach()를 해준다.
@@ -284,7 +249,7 @@ def train(writer, n_iter, actor, critic, trajectories, actor_optimizer, critic_o
             old_policies_b = torch.Tensor(old_policies)[mini_batch].detach() ## old_policy 값은 backpropagation에 반영되지 않도록 detach 해준다.
             
             Advantages_b = torch.Tensor(Advantages)[mini_batch]
-            Advantages_b = Advantages_b.unsqueeze(1) ## 차원을 맞추기위해 1추가.
+            Advantages_b = Advantages_b.unsqueeze(1) ## 차원을 맞추기위해 1추가. [batch_size, 1] 임.
                         
             ratio, L_CPI, entropies= surrogate_loss(actor, old_policies_b, Advantages_b, states_b, actions_b) ## ratio = policy_pi/old_policy_pi, L_CPI = ratio * Advantage
             
@@ -347,7 +312,7 @@ def main():
     actor_optimizer = optim.Adam(actor.parameters(), lr=learning_rate) ## actor에 대한 optimizer Adam으로 설정하기.
     critic_optimizer = optim.Adam(critic.parameters(), lr=learning_rate) ## critic에 대한 optimizer Adam으로 설정하기.
     
-    temp_score = 0.0
+    temp_score = 0.0 ## 출력용 변수
     score = 0.0
     for n_iter in range(10000): ## 반복
         trajectories = deque() ## (s,a,r,done 상태) 를 저장하는 history or trajectories라고 부름. 학습을 위해 저장 되어지는 경험 메모리라고 보면됨.
@@ -369,10 +334,8 @@ def main():
                 
                 action = distribution.sample().item() ## ex) prob_each_actions = [0.25, 0.35, 0.1, 0.3] 이라면 각각의 인덱스가 25%, 35%, 10%, 30%
                                             ## 0,1,2,3 값 중 하나가 위 확률에 따라 선택됨. 
-                old_policy = prob_each_actions[action] ## 실제 선택된 action의 확률 값만 저장해줌.
-                ##old_policy = distribution.log_prob(prob_each_actions[action])
-                ##print(distribution.log_prob(prob_each_actions[action]))
-                ##print(torch.log(old_policy))
+                old_policy = prob_each_actions[action] ## 실제 선택된 action의 확률 값을 old_policy로 저장함.
+                
                 next_state, reward, done, info = env.step([action]) ## * Saida RL library 분포에서 선택된 action이 다음 step에 들어감.
                 next_state = rearrange_State(next_state, state_size, env)
                 
@@ -396,11 +359,7 @@ def main():
                     print("step: ", step, "per_episode_score: ",temp_score)
                     temp_score = 0.0
                     break
-            """
-            if episode%500==0 and episode !=0: ## 100 episode마다 저장.
-                torch.save(actor.state_dict(), os.path.join('C:/SAIDA_RL/python/saida_agent_example/vultureZealot/save_ppo/','ppo_actor_'+str(episode)+'.pkl'))
-                torch.save(critic.state_dict(), os.path.join('C:/SAIDA_RL/python/saida_agent_example/vultureZealot/save_ppo/','ppo_critic_'+str(episode)+'.pkl'))
-            """
+            
             if episode%print_interval==0: ## 10 episode마다 score 출력 및 score 초기화.
                 print("# of episode :{}, avg score : {:.1f}".format(episode, score//print_interval))
                 writer.add_scalar('log/score', float(score//print_interval), episode)
