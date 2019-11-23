@@ -111,7 +111,7 @@ def reward_reshape(state, next_state, reward, done):
     if done:
         if reward > 0: ## env에서 반환된 reward가 1 이면, 질럿을 잡음.
             reward = KILL_REWARD
-            if next_state[3] == 1.0 and next_state[-6] == 0:
+            if next_state[3] == 1.0 and next_state[-6] == 0: ## perfect game을 달성하면 reward 5를 추가 지급.
                 reward+=5
                 
             return reward
@@ -126,9 +126,9 @@ def reward_reshape(state, next_state, reward, done):
         en_pre_hp = state[-6]
         en_cur_hp = next_state[-6]
         
-        if my_pre_hp - my_cur_hp > 0: ## 벌쳐가 맞아 버렸네 ㅠㅠ
+        if my_pre_hp - my_cur_hp > 0: ## 벌쳐가 맞았을 때
             reward += DAMAGED_REWARD
-        if en_pre_hp - en_cur_hp > 0: ## 질럿을 때려 버렸네 ㅠㅠ
+        if en_pre_hp - en_cur_hp > 0: ## 질럿을 공격했을 때
             reward += HIT_REWARD
         
         ## 벌쳐가 맞고, 질럿도 때리는 2가지 동시 case가 있을 거 같아. reward를 +=을 했고 각각 if문으로 처리했습니다.
@@ -140,8 +140,8 @@ def main():
     load = True
     episode = 45670
     
-    env = VultureVsZealot(version=0, frames_per_step=12, action_type=0, move_angle=20, move_dist=3, verbose=0, no_gui=True
-                          ,auto_kill=False) ## clear frame = 12 move = 45 move_dist = 6
+    env = VultureVsZealot(version=0, frames_per_step=12, action_type=0, move_angle=20, move_dist=3, verbose=0, no_gui=False
+                          ,auto_kill=False)
     print_interval = 10
     
     learning_rate=0.00003
