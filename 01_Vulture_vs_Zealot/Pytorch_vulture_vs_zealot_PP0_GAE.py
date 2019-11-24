@@ -20,38 +20,36 @@ from tensorboardX import SummaryWriter
 class Actor(nn.Module):
     def __init__(self, state_size, action_size):
         super(Actor, self).__init__()
-        self.fc1 = nn.Linear(state_size,256) ## input state
-        self.fc2 = nn.Linear(256,256)        
-        self.fc3 = nn.Linear(256,256)       
-        self.fc4 = nn.Linear(256,256)             
-        self.fc5 = nn.Linear(256,action_size) ## output each action
+        self.fc1 = nn.Linear(state_size,64) ## input state
+        self.fc2 = nn.Linear(64,128)
+        self.fc3 = nn.Linear(128,64)
+        self.fc4 = nn.Linear(64,action_size) ## output each action
 
     def forward(self, x, soft_dim):
-        x = torch.tanh(self.fc1(x))
-        x = torch.tanh(self.fc2(x))  
-        x = torch.tanh(self.fc3(x))  
-        x = torch.tanh(self.fc4(x))
-        prob_each_actions = F.softmax(self.fc5(x),dim=soft_dim) ## NN에서 각 action에 대한 확률을 추정한다.
+        x = torch.tanh(self.fc1(x))        
+        x = torch.tanh(self.fc2(x))
+        x = torch.tanh(self.fc3(x))
+
+        prob_each_actions = F.softmax(self.fc4(x),dim=soft_dim) ## NN에서 각 action에 대한 확률을 추정한다.
 
         return prob_each_actions
 
 class Critic(nn.Module):
     def __init__(self, state_size):
         super(Critic, self).__init__()
-        self.fc1 = nn.Linear(state_size,256) ## input state    
-        self.fc2 = nn.Linear(256,256)      
-        self.fc3 = nn.Linear(256,256)
-        self.fc4 = nn.Linear(256,256)        
-        self.fc5 = nn.Linear(256,1)## output value
+        self.fc1 = nn.Linear(state_size,64) ## input state
+        self.fc2 = nn.Linear(64,128)
+        self.fc3 = nn.Linear(128,64)
+        self.fc4 = nn.Linear(64,1)## output value
 
     def forward(self, x):
         x = torch.tanh(self.fc1(x))
         x = torch.tanh(self.fc2(x))
         x = torch.tanh(self.fc3(x))
-        x = torch.tanh(self.fc4(x))
-        value = self.fc5(x)
+        value = self.fc4(x)
 
         return value
+
 
 def scale_velocity(v):
     return v / 6.4
@@ -125,12 +123,15 @@ def reward_reshape(state, next_state, reward, done):
 
     KILL_REWARD = 10
     DEAD_REWARD = -10
-    DAMAGED_REWARD = -4
+    DAMAGED_REWARD = -6
     HIT_REWARD = 2
 
     if done:
         if reward > 0: ## env에서 반환된 reward가 1 이면, 질럿을 잡음.
             reward = KILL_REWARD
+            if next_state[3] == 1.0 and next_state[-6] == 0:
+                reward+=5
+                
             return reward
             # 잡은  경우
         else: ## 게임이 종료되고 -1 값을 받게 된다면, 
@@ -143,9 +144,9 @@ def reward_reshape(state, next_state, reward, done):
         en_pre_hp = state[-6]
         en_cur_hp = next_state[-6]
         
-        if my_pre_hp - my_cur_hp > 0: ## 벌쳐가 맞아 버렸네 ㅠㅠ
+        if my_pre_hp - my_cur_hp > 0: ## 벌쳐가 맞았을 때
             reward += DAMAGED_REWARD
-        if en_pre_hp - en_cur_hp > 0: ## 질럿을 때려 버렸네 ㅠㅠ
+        if en_pre_hp - en_cur_hp > 0: ## 질럿을 때렸을 때
             reward += HIT_REWARD
         
         ## 벌쳐가 맞고, 질럿도 때리는 2가지 동시 case가 있을 거 같아. reward를 +=을 했고 각각 if문으로 처리했습니다.
@@ -283,10 +284,10 @@ def main():
                           ,auto_kill=False) ## clear frame = 12 move = 45 move_dist = 6
                                             ## clear frame = 12 move = 30 move_dist = 3 .. best
     print_interval = 10 ## 출력
-    batch_size = 8 ## 8
+    batch_size = 5 ## 8
     epoch = 10
     learning_rate=0.00003
-    T_horizon = 2048 ## 얼마큼의 trajectory를 수집할건지. 여러 actor를 한다면 여러 actor가 수집한 총 trajectory 갯수.
+    T_horizon = 3000 ## 얼마큼의 trajectory를 수집할건지. 여러 actor를 한다면 여러 actor가 수집한 총 trajectory 갯수.
                     ## 1024
     torch.manual_seed(500)
     ## 환경을 불러온다.
