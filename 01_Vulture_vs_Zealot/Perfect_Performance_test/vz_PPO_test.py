@@ -20,8 +20,8 @@ class Actor(nn.Module):
     def __init__(self, state_size, action_size):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(state_size,128) ## input state
-        self.fc2 = nn.Linear(128,256)
-        self.fc3 = nn.Linear(256,128)
+        self.fc2 = nn.Linear(128,512)
+        self.fc3 = nn.Linear(512,128)
         self.fc4 = nn.Linear(128,action_size) ## output each action
 
     def forward(self, x, soft_dim):
@@ -111,7 +111,7 @@ def reward_reshape(state, next_state, reward, done):
     if done:
         if reward > 0: ## env에서 반환된 reward가 1 이면, 질럿을 잡음.
             reward = KILL_REWARD
-            if next_state[3] == 1.0 and next_state[-6] == 0: ## perfect game을 달성하면 reward 5를 추가 지급.
+            if next_state[3] == 1.0 and next_state[-6] == 0: ## perfect clear했다면 추가 bonus reward
                 reward+=5
                 
             return reward
@@ -126,9 +126,9 @@ def reward_reshape(state, next_state, reward, done):
         en_pre_hp = state[-6]
         en_cur_hp = next_state[-6]
         
-        if my_pre_hp - my_cur_hp > 0: ## 벌쳐가 맞았을 때
+        if my_pre_hp - my_cur_hp > 0: ## 벌쳐가 맞아 버렸네 ㅠㅠ
             reward += DAMAGED_REWARD
-        if en_pre_hp - en_cur_hp > 0: ## 질럿을 공격했을 때
+        if en_pre_hp - en_cur_hp > 0: ## 질럿을 때려 버렸네 ㅠㅠ
             reward += HIT_REWARD
         
         ## 벌쳐가 맞고, 질럿도 때리는 2가지 동시 case가 있을 거 같아. reward를 +=을 했고 각각 if문으로 처리했습니다.
@@ -138,7 +138,8 @@ def reward_reshape(state, next_state, reward, done):
 def main():
     
     load = True
-    episode = 45670
+    episode = 0 ## 21710:91.1% 21610: 91% 21600: 90% 여러 모델 테스트 결과 중 3 모델이 90% 이상을 보였음.
+                ## 환경의 초기, 진행되는 episode의 조건에 따라 86% ~ 91% 까지 perfect score를 보임. 
     
     env = VultureVsZealot(version=0, frames_per_step=12, action_type=0, move_angle=20, move_dist=3, verbose=0, no_gui=False
                           ,auto_kill=False)
